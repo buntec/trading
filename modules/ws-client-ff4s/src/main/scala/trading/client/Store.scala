@@ -10,6 +10,8 @@ import trading.ws.WsIn
 import trading.ws.WsOut
 import org.scalajs.dom
 import fs2.Stream
+import cats.effect.kernel.Resource.ExitCase
+import cats.effect.kernel.Outcome
 
 object Store:
 
@@ -29,25 +31,28 @@ object Store:
         _ match
           case Action.CloseAlerts =>
             stateRef.update(_.copy(error = None, sub = None, unsub = None))
+
           case Action.SymbolChanged(in) => stateRef.update {
               _.copy(input = in, symbol = Symbol(in.value))
             }
+
           case Action.Subscribe => stateRef.modify { state =>
               (state.socket.id, state.symbol) match
                 case (_, Symbol.XEMPTY) =>
                   state.copy(error = "Invalid symbol".some) -> F.unit
                 case (Some(_), sl) =>
-                  val nm = state.copy(sub = sl.some, symbol = mempty, input = mempty)
-                  nm -> (wsSendQ.offer(WsIn.Subscribe(sl)) >> refocusInput)
+                  val ns = state.copy(sub = sl.some, symbol = mempty, input = mempty)
+                  ns -> (wsSendQ.offer(WsIn.Subscribe(sl)) >> refocusInput)
                 case (None, _) =>
                   state.copy(error = "Disconnected from server, please click on Connect.".some) -> F.unit
             }.flatten
+
           case Action.Unsubscribe(symbol) => stateRef.modify { state =>
               state.socket.id.fold((
                 state.copy(error = "Disconnected from server, please click on Connect.".some) -> F.unit
               )) { _ =>
-                val nm = state.copy(unsub = symbol.some, alerts = state.alerts - symbol)
-                nm -> (wsSendQ.offer(WsIn.Unsubscribe(symbol)) >> refocusInput)
+                val ns = state.copy(unsub = symbol.some, alerts = state.alerts - symbol)
+                ns -> (wsSendQ.offer(WsIn.Unsubscribe(symbol)) >> refocusInput)
               }
             }.flatten
 
@@ -69,17 +74,24 @@ object Store:
 
           case Action.ConnectWs => connQ.offer(())
 
-          case Action.SetWsStatus(status) => F.unit
+          case Action.SetWsStatus(status) =>
+            stateRef.update(_.focus(_.socket.status).replace(status))
       }
 
       // establish websockets connection
       _ <- Stream.fromQueueUnterminated(connQ).switchMap { _ =>
         Stream.exec(
-          ff4s.WebSocketsClient[F].bidirectionalJson[WsOut, WsIn](
-            "ws://localhost:9000/v1/ws",
-            _.evalMap(msg => store.dispatch(Action.Recv(msg))),
-            Stream.fromQueueUnterminated(wsSendQ)
-          )
+          store.state.get.flatMap { state =>
+            ff4s.WebSocketsClient[F].bidirectionalJson[WsOut, WsIn](
+              state.socket.wsUrl.value,
+              _.evalMap(msg => store.dispatch(Action.Recv(msg))),
+              Stream.fromQueueUnterminated(wsSendQ)
+            )
+          }.guaranteeCase {
+            case Outcome.Errored(t)   => store.dispatch(Action.SetWsStatus(WsStatus.Failed(t.toString)))
+            case Outcome.Succeeded(_) => store.dispatch(Action.SetWsStatus(WsStatus.Closed))
+            case Outcome.Canceled()   => F.unit
+          }
         )
       }.compile.drain.background
     yield store

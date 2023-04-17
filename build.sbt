@@ -207,7 +207,8 @@ lazy val webapp = (project in file("modules/ws-client"))
 lazy val `webapp-ff4s` = (project in file("modules/ws-client-ff4s"))
   .enablePlugins(ScalaJSPlugin)
   .settings(
-    scalafmtOnCompile := false,
+    scalafmtOnCompile               := false,
+    scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= List(
       Libraries.circeCore.value,
       Libraries.circeParser.value,

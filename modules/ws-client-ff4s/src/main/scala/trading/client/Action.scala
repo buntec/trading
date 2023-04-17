@@ -17,3 +17,4 @@ enum WsStatus:
   case Connecting
   case Connected
   case Failed(msg: String)
+  case Closed

@@ -19,12 +19,18 @@ object InputText extends Newtype[String]:
 final case class TradingSocket(
     wsUrl: WsUrl,
     id: Option[SocketId],
-    error: Option[String]
+    error: Option[String],
+    status: WsStatus
 )
 
 object TradingSocket:
 
-  val init = TradingSocket(WsUrl("ws://localhost:9000/v1/ws"), None, None)
+  val init = TradingSocket(
+    WsUrl("ws://localhost:9000/v1/ws"),
+    None,
+    None,
+    WsStatus.Closed
+  )
 
 final case class State(
     symbol: Symbol,
