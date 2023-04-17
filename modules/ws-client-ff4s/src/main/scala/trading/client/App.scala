@@ -129,7 +129,7 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
           span(" "),
           button(
             `class` := "badge badge-pill badge-primary",
-            onClick := (_ => WsMsg.Connecting.asAction.some),
+            onClick := (_ => Action.ConnectWs.some),
             "Connect"
           )
         )

@@ -16,17 +16,22 @@ object Store:
   def apply[F[_]](implicit F: Async[F]) =
     for
       wsSendQ <- Queue.unbounded[F, WsIn].toResource
+      connQ   <- Queue.unbounded[F, Unit].toResource
+
       // ad-hoc implementation; should use fs2.dom
       refocusInput = F.delay {
         val elm = dom.document.getElementById("symbol-input").asInstanceOf[dom.HTMLElement]
-        elm.focus()
-      }
+        if elm != null then
+          elm.focus()
+      }.attempt.void
+
       store <- ff4s.Store[F, State, Action](State.init) { stateRef =>
         _ match
           case Action.CloseAlerts =>
             stateRef.update(_.copy(error = None, sub = None, unsub = None))
-          case Action.SymbolChanged(in) => stateRef.update { _.copy(input = in) }
-          // stateRef.update(_.copy(symbol = Symbol(in), input = in))
+          case Action.SymbolChanged(in) => stateRef.update {
+              _.copy(input = in, symbol = Symbol(in.value))
+            }
           case Action.Subscribe => stateRef.modify { state =>
               (state.socket.id, state.symbol) match
                 case (_, Symbol.XEMPTY) =>
@@ -62,17 +67,19 @@ object Store:
                 case Some(_) => state
             }
 
-          case Action.ConnStatus(msg) => F.unit
-          case Action.FocusError(id) => stateRef.update {
-              _.copy(error = s"Fail to focus on ID: ${id.show}".some)
-            }
+          case Action.ConnectWs => connQ.offer(())
 
+          case Action.SetWsStatus(status) => F.unit
       }
-      _ <- ff4s.WebSocketsClient[F].bidirectionalJson[WsOut, WsIn](
-        "ws://localhost:9000/v1/ws",
-        _.evalMap { msg =>
-          store.dispatch(Action.Recv(msg))
-        },
-        Stream.fromQueueUnterminated(wsSendQ)
-      ).background
+
+      // establish websockets connection
+      _ <- Stream.fromQueueUnterminated(connQ).switchMap { _ =>
+        Stream.exec(
+          ff4s.WebSocketsClient[F].bidirectionalJson[WsOut, WsIn](
+            "ws://localhost:9000/v1/ws",
+            _.evalMap(msg => store.dispatch(Action.Recv(msg))),
+            Stream.fromQueueUnterminated(wsSendQ)
+          )
+        )
+      }.compile.drain.background
     yield store
