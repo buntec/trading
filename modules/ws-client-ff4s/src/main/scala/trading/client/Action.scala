@@ -23,4 +23,3 @@ enum Action:
   case Recv(in: WsOut)
   case ConnStatus(msg: WsMsg)
   case FocusError(id: ElemId)
-  case NoOp

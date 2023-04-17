@@ -22,6 +22,10 @@ final case class TradingSocket(
     error: Option[String]
 )
 
+object TradingSocket:
+
+  val init = TradingSocket(WsUrl("ws://localhost:9000/v1/ws"), None, None)
+
 final case class State(
     symbol: Symbol,
     input: InputText,
@@ -33,3 +37,17 @@ final case class State(
     unsub: Option[Symbol],
     error: Option[String]
 )
+
+object State:
+
+  val init = State(
+    symbol = mempty,
+    input = mempty,
+    socket = TradingSocket.init,
+    onlineUsers = mempty,
+    alerts = Map.empty, // Dummy.alerts,
+    tradingStatus = TradingStatus.On,
+    sub = None,
+    unsub = None,
+    error = None
+  )

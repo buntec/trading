@@ -7,7 +7,7 @@ import cats.syntax.all.*
 
 class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
 
-  override val store: Resource[F, ff4s.Store[F, State, Action]] = ???
+  override val store = Store[F]
 
   import dsl.*
   import dsl.html.*
