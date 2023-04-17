@@ -204,6 +204,24 @@ lazy val webapp = (project in file("modules/ws-client"))
   )
   .dependsOn(domain.js)
 
+lazy val `webapp-ff4s` = (project in file("modules/ws-client-ff4s"))
+  .enablePlugins(ScalaJSPlugin)
+  .settings(
+    scalafmtOnCompile := false,
+    libraryDependencies ++= List(
+      Libraries.circeCore.value,
+      Libraries.circeParser.value,
+      Libraries.circeRefined.value,
+      Libraries.monocleCore.value,
+      Libraries.refinedCore.value,
+      Libraries.refinedCats.value,
+      Libraries.scalajsTime.value,
+      "io.github.buntec" %%% "ff4s" % "0.11.0"
+    ),
+    logo := fedaLogo(scalaVersion.value, name.value)
+  )
+  .dependsOn(domain.js)
+
 // integration tests
 lazy val it = (project in file("modules/it"))
   .settings(commonSettings: _*)
