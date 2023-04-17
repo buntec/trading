@@ -38,3 +38,5 @@ modules/x-demo/src/main/scala/demo/Stuff.scala
 pulsarconf/connectors/*.nar
 nix-parcel/
 nix-parcel-cache/
+.bsp/
+metals.sbt
