@@ -2,16 +2,17 @@ package trading.client
 
 import cats.effect.*
 import trading.domain.*
-import cats.syntax.show.*
+import org.scalajs.dom
+import cats.syntax.all.*
 
 class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
 
-  override def store: Resource[F, ff4s.Store[F, State, Action]] = ???
+  override val store: Resource[F, ff4s.Store[F, State, Action]] = ???
 
   import dsl.*
   import dsl.html.*
 
-  override def root: dsl.V = useState { model =>
+  override val root = useState { state =>
     div(
       `class` := "container",
       genericErrorAlert,
@@ -25,15 +26,22 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
           idAttr      := "symbol-input",
           autoFocus   := true,
           placeholder := "Symbol (e.g. EURUSD)",
-          // onInput (s => Msg.SymbolChanged(InputText(s))),
-          // onKeyDown(subscribeOnEnter),
-          value := model.input.value
+          onInput := ((ev: dom.Event) =>
+            ev.target match
+              case el: dom.HTMLInputElement => Some(Action.SymbolChanged(InputText(el.value)))
+              case _                        => None
+          ),
+          onKeyDown := ((ev: dom.KeyboardEvent) =>
+            if ev.key == "Enter" then Action.Subscribe.some
+            else none
+          ),
+          value := state.input.value
         ),
         div(
           `class` := "input-group-append",
           button(
             `class` := "btn btn-outline-primary btn-rounded",
-            // onClick(Msg.Subscribe)
+            onClick := (_ => Action.Subscribe.some),
             "Subscribe"
           )
         )
@@ -51,7 +59,7 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
       p(),
       table(
         `class` := "table table-inverse",
-        hidden  := model.alerts.isEmpty,
+        hidden  := state.alerts.isEmpty,
         thead(
           tr(
             th("Symbol"),
@@ -64,7 +72,7 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
           )
         ),
         tbody(
-          model.alerts.toList.flatMap((sl, alt) => alertRow(sl, alt))
+          state.alerts.toList.flatMap((sl, alt) => alertRow(sl, alt))
         )
       )
     )
@@ -77,28 +85,28 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
       `class` := s"alert alert-$status fade show",
       hidden  := property.isEmpty,
       button(
-        `class` := "close",
-        // attribute("aria-label", "Close"),
-        // onClick(Msg.CloseAlerts)
+        `class`       := "close",
+        aria("label") := "Close",
+        onClick       := (_ => Action.CloseAlerts.some),
         "x"
       ),
       message ++ property.getOrElse("X")
     )
 
-  val genericErrorAlert = useState { model =>
-    mkAlert(model.error, "generic-error", "danger", "Error: ")
+  val genericErrorAlert = useState { state =>
+    mkAlert(state.error, "generic-error", "danger", "Error: ")
   }
 
-  val subscriptionSuccess = useState { model =>
-    mkAlert(model.sub.map(_.show), "subscription-success", "success", "Subscribed to ")
+  val subscriptionSuccess = useState { state =>
+    mkAlert(state.sub.map(_.show), "subscription-success", "success", "Subscribed to ")
   }
 
-  val unsubscriptionSuccess = useState { model =>
-    mkAlert(model.unsub.map(_.show), "unsubscription-success", "warning", "Unsubscribed from ")
+  val unsubscriptionSuccess = useState { state =>
+    mkAlert(state.unsub.map(_.show), "unsubscription-success", "warning", "Unsubscribed from ")
   }
 
-  val tradeStatus = useState { model =>
-    model.tradingStatus match
+  val tradeStatus = useState {
+    _.tradingStatus match
       case TradingStatus.On =>
         span(idAttr := "trade-status", `class` := "badge badge-pill badge-success", "Trading On")
 
@@ -106,8 +114,8 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
         span(idAttr := "trade-status", `class` := "badge badge-pill badge-danger", "Trading Off")
   }
 
-  val connectionDetails = useState { model =>
-    (model.socket.id, model.onlineUsers) match
+  val connectionDetails = useState { state =>
+    (state.socket.id, state.onlineUsers) match
       case (Some(sid), online) =>
         span(
           span(idAttr := "socket-id", `class` := "badge badge-pill badge-success", s"Socket ID: ${sid.show}"),
@@ -121,7 +129,7 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
           span(" "),
           button(
             `class` := "badge badge-pill badge-primary",
-            // onClick(WsMsg.Connecting.asMsg),
+            onClick := (_ => WsMsg.Connecting.asAction.some),
             "Connect"
           )
         )
@@ -141,8 +149,8 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
             th(
               button(
                 `class` := "badge badge-pill badge-danger",
-                // onClick(Msg.Unsubscribe(symbol)),
-                title := "Unsubscribe",
+                onClick := (_ => Action.Unsubscribe(symbol).some),
+                title   := "Unsubscribe",
                 img(
                   src        := "assets/icons/delete.png",
                   widthAttr  := 16,
