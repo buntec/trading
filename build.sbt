@@ -217,7 +217,7 @@ lazy val `webapp-ff4s` = (project in file("modules/ws-client-ff4s"))
       Libraries.refinedCore.value,
       Libraries.refinedCats.value,
       Libraries.scalajsTime.value,
-      "io.github.buntec" %%% "ff4s" % "0.11.0"
+      "io.github.buntec" %%% "ff4s" % "0.13.0"
     ),
     logo := fedaLogo(scalaVersion.value, name.value)
   )

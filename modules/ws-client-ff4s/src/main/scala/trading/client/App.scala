@@ -14,13 +14,13 @@ class App[F[_]](implicit F: Async[F]) extends ff4s.App[F, State, Action]:
   import dsl.*
   import dsl.html.*
 
-  override val root = useState { state =>
+  override val view = useState { state =>
     div(
       `class` := "container",
       genericErrorAlert,
       subscriptionSuccess,
       unsubscriptionSuccess,
-      h2(styleAttr := "align-content: center", "Trading WS"),
+      h2(styleAttr := "text-align: center", "Trading WS"), // "align" attr is deprecated
       div(
         `class` := "input-group mb-3",
         input(

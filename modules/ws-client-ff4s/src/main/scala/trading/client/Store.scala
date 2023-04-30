@@ -17,8 +17,11 @@ object Store:
 
   def apply[F[_]](implicit F: Async[F]) =
     for
+      // queue for outbound WS messages
       wsSendQ <- Queue.unbounded[F, WsIn].toResource
-      connQ   <- Queue.unbounded[F, Unit].toResource
+
+      // offering to this queue (re)opens the WS connection
+      wsConnQ <- Queue.unbounded[F, Unit].toResource
 
       // ad-hoc implementation; should use fs2.dom
       refocusInput = F.delay {
@@ -72,17 +75,17 @@ object Store:
                 case Some(_) => state
             }
 
-          case Action.ConnectWs => connQ.offer(())
+          case Action.ConnectWs => wsConnQ.offer(())
 
           case Action.SetWsStatus(status) =>
             stateRef.update(_.focus(_.socket.status).replace(status))
       }
 
-      // establish websockets connection
-      _ <- Stream.fromQueueUnterminated(connQ).switchMap { _ =>
+      // establish websocket connection
+      _ <- Stream.fromQueueUnterminated(wsConnQ).switchMap { _ =>
         Stream.exec(
           store.state.get.flatMap { state =>
-            ff4s.WebSocketsClient[F].bidirectionalJson[WsOut, WsIn](
+            ff4s.WebSocketClient[F].bidirectionalJson[WsOut, WsIn](
               state.socket.wsUrl.value,
               _.evalMap(msg => store.dispatch(Action.Recv(msg))),
               Stream.fromQueueUnterminated(wsSendQ)
@@ -91,7 +94,7 @@ object Store:
             case Outcome.Errored(t)   => store.dispatch(Action.SetWsStatus(WsStatus.Failed(t.toString)))
             case Outcome.Succeeded(_) => store.dispatch(Action.SetWsStatus(WsStatus.Closed))
             case Outcome.Canceled()   => F.unit
-          }
+          }.handleError(_ => ())
         )
       }.compile.drain.background
     yield store
